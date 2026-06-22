@@ -1,17 +1,20 @@
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
+const path = require('path'); // 👈 CERTIFIQUE-SE DE TER ESSA LINHA AQUI!
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
+
+// 👈 CORREÇÃO CRUCIAL PARA QUALQUER SERVIDOR WEB (LINUX/RENDER):
 app.use(express.static(path.join(__dirname, 'public')));
 
 const HEADERS = { 'X-Auth-Token': process.env.API_KEY };
 
+// ... mantenha o restante das suas rotas (/api/matches, /api/standings, /api/scorers) exatamente como estão embaixo
 // 1. Rota para Jogos (Partidas Recentes e Próximas)
 app.get('/api/matches', async (req, res) => {
     try {
