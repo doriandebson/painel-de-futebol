@@ -47,7 +47,7 @@ app.get('/api/standings', async (req, res) => {
     }
 });
 
-// 3. Rota para Artilharia (Scorers)
+// 3. Rota para Artilharia (Scorers) atualizada e fechada corretamente:
 app.get('/api/scorers', async (req, res) => {
     try {
         const league = req.query.league || 'SA';
@@ -63,6 +63,7 @@ app.get('/api/scorers', async (req, res) => {
     }
 });
 
+// 👈 ADICIONE ESTE BLOCO ABAIXO NO FINAL ABSOLUTO DO SERVER.JS:
 app.listen(PORT, () => {
-    console.log(`Servidor online na porta ${PORT}`);
+    console.log(`Servidor profissional online na porta ${PORT}`);
 });
