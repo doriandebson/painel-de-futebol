@@ -247,8 +247,8 @@
         // Checa se existem partidas ativas ocorrendo no momento
         const temJogoAoVivo = partidas.some(m => m.status === 'IN_PLAY' || m.status === 'PAUSED');
         
-        // Intervalo menor para jogos ao vivo (10s), e relaxado se não houver (60s)
-        const tempoEspera = temJogoAoVivo ? 10000 : 60000;
+        // Intervalo menor para jogos ao vivo (20s), e relaxado se não houver (60s)
+        const tempoEspera = temJogoAoVivo ? 20000 : 60000;
 
         temporizadorFetch = setInterval(() => {
             const league = document.getElementById('leagueSelector').value;
