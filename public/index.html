@@ -195,7 +195,7 @@
         <div class="section-box">
             <h2 class="section-title">Classificação</h2>
             <div id="standingsTablesContainer">
-                <p>Carregando classification...</p>
+                <p>Carregando classificação...</p>
             </div>
         </div>
     </div>
@@ -211,32 +211,248 @@
         
         const league = leagueSelector.value;
         
-        // Controla a exibição do seletor de fases (Mata-Mata)
-        // Só mostra se for Copa do Mundo (WC) ou Champions League (CL)
+        // Controla se exibe ou oculta o seletor de fases
         if (league === 'WC' || league === 'CL') {
             stageSelector.style.display = 'inline-block';
         } else {
             stageSelector.style.display = 'none';
-            stageSelector.value = 'FASE_DE_GRUPOS'; // Força o retorno à estrutura de pontos corridos
+            stageSelector.value = 'FASE_DE_GRUPOS'; 
         }
 
         const stage = stageSelector.value;
         
-        // Se for selecionado uma fase eliminatória (Mata-Mata)
-        if (stage !== 'FASE_DE_GRUPOS') {
+        // CORREÇÃO: "FASE_DE_GRUPOS" usa fluxo normal de pontos corridos da API
+        if (stage && stage !== 'FASE_DE_GRUPOS') {
             telaMataMataAtiva = true;
             
-            // Oculta tabelas corridas irrelevantes para o Mata-Mata
             document.getElementById('standingsBox').style.display = 'none';
             document.getElementById('scorersBox').style.display = 'none';
-            document.getElementById('leftColumn').style.gridColumn = '1 / -1'; // Ocupa largura total
+            document.getElementById('leftColumn').style.gridColumn = '1 / -1'; 
             
-            // Altera títulos das caixas de jogos
             document.getElementById('titleLeftMatches').innerText = "Jogos da Fase";
             document.getElementById('titleRightMatches').innerText = "Status / Info";
             document.getElementById('nextMatches').innerHTML = '<p style="font-size:13px;color:var(--text-muted)">Modo eliminatório ativo. Todos os confrontos da etapa selecionada estão listados na coluna à esquerda.</p>';
 
             loadMataMata(league, stage);
         } else {
-            // Retorna ao fluxo padrão de liga regular (Fase de Grupos/Pontos corridos)
             telaMataMataAtiva = false;
+            document.getElementById('standingsBox').style.display = 'block';
+            document.getElementById('scorersBox').style.display = 'block';
+            document.getElementById('leftColumn').style.gridColumn = 'auto';
+            
+            document.getElementById('titleLeftMatches').innerText = "Partidas Recentes";
+            document.getElementById('titleRightMatches').innerText = "Próximas Partidas";
+
+            loadMatches(league);
+            loadStandings(league);
+            loadScorers(league);
+        }
+    }
+
+    function gerenciarCadenciaAutomatica(partidas) {
+        if (temporizadorFetch) clearInterval(temporizadorFetch);
+        const temJogoAoVivo = partidas.some(m => m.status === 'IN_PLAY' || m.status === 'PAUSED');
+        const tempoEspera = temJogoAoVivo ? 20000 : 60000;
+
+        temporizadorFetch = setInterval(() => {
+            const league = document.getElementById('leagueSelector').value;
+            const stage = document.getElementById('stageSelector').value;
+            
+            if (telaMataMataAtiva) {
+                loadMataMata(league, stage);
+            } else {
+                loadMatches(league);
+            }
+        }, tempoEspera);
+    }
+
+    async function loadMatches(league) {
+        try {
+            const res = await fetch(`/api/matches?league=${league}`);
+            const data = await res.json();
+            const matches = data.matches || [];
+
+            const recent = matches.filter(m => m.status === 'FINISHED' || m.status === 'AWARDED' || m.status === 'IN_PLAY' || m.status === 'PAUSED').slice(-8).reverse();
+            const next = matches.filter(m => m.status === 'SCHEDULED' || m.status === 'TIMED').slice(0, 8);
+
+            renderMatchList(recent, 'recentMatches');
+            renderMatchList(next, 'nextMatches');
+            
+            gerenciarCadenciaAutomatica(matches);
+        } catch (e) {
+            document.getElementById('recentMatches').innerHTML = '<p>Erro ao carregar partidas.</p>';
+            document.getElementById('nextMatches').innerHTML = '<p>Erro ao carregar partidas.</p>';
+        }
+    }
+
+    async function loadMataMata(league, stage) {
+        try {
+            const res = await fetch(`/api/stage?league=${league}&stage=${stage}`);
+            const data = await res.json();
+            const matches = data.matches || [];
+
+            renderMatchList(matches, 'recentMatches');
+            gerenciarCadenciaAutomatica(matches);
+        } catch (e) {
+            document.getElementById('recentMatches').innerHTML = '<p>Erro ao carregar confrontos eliminatórios.</p>';
+        }
+    }
+
+    function renderMatchList(matches, elementId) {
+        const container = document.getElementById(elementId);
+        container.innerHTML = '';
+        if(matches.length === 0) { 
+            container.innerHTML = '<p style="font-size:13px;color:var(--text-muted)">Nenhum jogo listado para esta seleção.</p>'; 
+            return; 
+        }
+
+        matches.forEach(m => {
+            const date = new Date(m.utcDate).toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+            const homeScore = m.score.fullTime.home !== null ? m.score.fullTime.home : '-';
+            const awayScore = m.score.fullTime.away !== null ? m.score.fullTime.away : '-';
+            
+            const ehAoVivo = m.status === 'IN_PLAY' || m.status === 'PAUSED';
+            const classeAoVivo = ehAoVivo ? 'live-card' : '';
+            
+            let statusTexto = m.status === 'FINISHED' ? 'Encerrado' : 'Agendado';
+            if (m.status === 'IN_PLAY') statusTexto = '<span class="badge-live">AO VIVO</span>';
+            if (m.status === 'PAUSED') statusTexto = '<span class="badge-live">INTERVALO</span>';
+
+            container.innerHTML += `
+                <div class="mini-match-card ${classeAoVivo}">
+                    <div class="match-row">
+                        <div class="match-team"><img class="crest" src="${m.homeTeam.crest}" onerror="this.style.display='none'"> ${m.homeTeam.shortName || m.homeTeam.name}</div>
+                        <div class="match-score">${homeScore}</div>
+                    </div>
+                    <div class="match-row">
+                        <div class="match-team"><img class="crest" src="${m.awayTeam.crest}" onerror="this.style.display='none'"> ${m.awayTeam.shortName || m.awayTeam.name}</div>
+                        <div class="match-score">${awayScore}</div>
+                    </div>
+                    <div class="match-meta">
+                        <span>${date}</span>
+                        <span style="color:var(--accent)">${statusTexto}</span>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    async function loadStandings(league) {
+        try {
+            const res = await fetch(`/api/standings?league=${league}`);
+            if (!res.ok) throw new Error();
+            const data = await res.json();
+            
+            const container = document.getElementById('standingsTablesContainer');
+            container.innerHTML = '';
+
+            const standings = data.standings || [];
+            
+            if(standings.length === 0) { 
+                document.getElementById('standingsBox').style.display = 'none';
+                checkLayoutAdjustment();
+                return; 
+            }
+
+            // Garante exibição do bloco se houver dados válidos
+            document.getElementById('standingsBox').style.display = 'block';
+
+            standings.forEach(group => {
+                const groupName = group.group ? `<h3 style="font-size: 14px; color: var(--accent); margin: 15px 0 5px 0;">${group.group.replace('_', ' ')}</h3>` : '';
+                
+                let tableHTML = `
+                    ${groupName}
+                    <table style="margin-bottom: 20px;">
+                        <thead>
+                            <tr>
+                                <th style="width: 30px;">Pos</th>
+                                <th>Time</th>
+                                <th class="text-center">P</th>
+                                <th class="text-center">PTS</th>
+                                <th class="text-center">+/-</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                group.table.forEach(row => {
+                    tableHTML += `
+                        <tr>
+                            <td><strong>${row.position}</strong></td>
+                            <td>
+                                <div class="flex-align">
+                                    <img class="crest" src="${row.team.crest}" onerror="this.style.display='none'">
+                                    <span>${row.team.shortName || row.team.name}</span>
+                                </div>
+                            </td>
+                            <td class="text-center">${row.playedGames}</td>
+                            <td class="text-center" style="font-weight:bold;color:var(--accent)">${row.points}</td>
+                            <td class="text-center">${row.goalDifference > 0 ? '+' + row.goalDifference : row.goalDifference}</td>
+                        </tr>
+                    `;
+                });
+
+                tableHTML += `</tbody></table>`;
+                container.innerHTML += tableHTML;
+            });
+
+        } catch (e) { 
+            document.getElementById('standingsBox').style.display = 'none';
+            checkLayoutAdjustment();
+        }
+    }
+
+    async function loadScorers(league) {
+        try {
+            const res = await fetch(`/api/scorers?league=${league}`);
+            if (!res.ok) throw new Error();
+            const data = await res.json();
+            const tableBody = document.querySelector('#scorersTable tbody');
+            tableBody.innerHTML = '';
+
+            const scorers = data.scorers || [];
+            if(scorers.length === 0) { 
+                document.getElementById('scorersBox').style.display = 'none';
+                checkLayoutAdjustment();
+                return; 
+            }
+
+            // Garante exibição do bloco se houver dados válidos
+            document.getElementById('scorersBox').style.display = 'block';
+
+            scorers.forEach((s, idx) => {
+                tableBody.innerHTML += `
+                    <tr>
+                        <td>${idx + 1}</td>
+                        <td><strong>${s.player.name}</strong></td>
+                        <td>
+                            <div class="flex-align">
+                                <img class="crest" src="${s.team.crest}" onerror="this.style.display='none'">
+                                <span>${s.team.shortName || s.team.name}</span>
+                            </div>
+                        </td>
+                        <td class="text-center" style="font-weight:bold;color:var(--accent)">${s.goals}</td>
+                        <td class="text-center">${s.assists || 0}</td>
+                    </tr>
+                `;
+            });
+        } catch (e) { 
+            document.getElementById('scorersBox').style.display = 'none';
+            checkLayoutAdjustment();
+        }
+    }
+
+    function checkLayoutAdjustment() {
+        const standingsVisible = document.getElementById('standingsBox').style.display !== 'none';
+        const scorersVisible = document.getElementById('scorersBox').style.display !== 'none';
+        
+        if (!standingsVisible && !scorersVisible) {
+            document.getElementById('leftColumn').style.gridColumn = '1 / -1';
+        }
+    }
+
+    // Inicialização do Painel Geral
+    loadDashboard();
+</script>
+</body>
+</html>
